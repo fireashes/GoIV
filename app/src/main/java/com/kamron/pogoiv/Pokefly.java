@@ -293,7 +293,7 @@ public class Pokefly extends Service {
     @BindView(R.id.appraisalIVRange1)
     RadioButton appraisalIVRange1;
 
-    @BindView (R.id.attDefStaLayout)
+    @BindView(R.id.attDefStaLayout)
     LinearLayout attDefStaLayout;
     @BindView(R.id.attCheckbox)
     CheckBox attCheckbox;
@@ -502,11 +502,11 @@ public class Pokefly extends Service {
 
     private void watchScreen() {
         area[0] = new Point(                // these values used to get "white" left of "power up"
-                Math.round(displayMetrics.widthPixels / 24),
-                (int) Math.round(displayMetrics.heightPixels / 1.24271845));
+                (int) Math.round(displayMetrics.widthPixels * 0.041667),
+                (int) Math.round(displayMetrics.heightPixels * 0.8046875));
         area[1] = new Point(                // these values used to get greenish color in transfer button
-                (int) Math.round(displayMetrics.widthPixels / 1.15942029),
-                (int) Math.round(displayMetrics.heightPixels / 1.11062907));
+                (int) Math.round(displayMetrics.widthPixels * 0.862445),
+                (int) Math.round(displayMetrics.heightPixels * 0.9004));
 
         screenScanHandler = new Handler();
         screenScanRunnable = new Runnable() {
@@ -1224,8 +1224,10 @@ public class Pokefly extends Service {
 
         refineByAvailableAppraisalInfo(ivScanResult);
 
-
-        addClipboardInfoIfSettingOn(ivScanResult);
+        //Dont run clipboard logic if scan failed - some tokens might crash the program.
+        if (ivScanResult.iVCombinations.size() > 0) {
+            addClipboardInfoIfSettingOn(ivScanResult);
+        }
         populateResultsBox(ivScanResult);
         boolean enableCompare = ScanContainer.scanContainer.prevScan != null;
         exResCompare.setEnabled(enableCompare);
@@ -1398,6 +1400,30 @@ public class Pokefly extends Service {
     }
 
     /**
+     * Adds the iv range of the pokemon to the clipboard if the clipboard setting is on.
+     */
+    public void addSpecificClipboard(IVScanResult ivScanResult, IVCombination ivCombination) {
+
+
+        ClipboardTokenHandler cth = new ClipboardTokenHandler(getApplicationContext());
+        String clipResult = "";
+        IVScanResult singleIVScanResult = new IVScanResult(ivScanResult.pokemon, ivScanResult.estimatedPokemonLevel,
+                ivScanResult.scannedCP);
+        singleIVScanResult.addIVCombination(ivCombination.att, ivCombination.def, ivCombination.sta);
+        clipResult = cth.getResults(singleIVScanResult, pokeInfoCalculator, true);
+
+
+        Toast toast = Toast.makeText(this, String.format(getString(R.string.clipboard_copy_toast), clipResult),
+                Toast.LENGTH_SHORT);
+        toast.setGravity(Gravity.CENTER, 0, 0);
+        toast.show();
+
+        ClipData clip = ClipData.newPlainText(clipResult, clipResult);
+        clipboard.setPrimaryClip(clip);
+
+    }
+
+    /**
      * Initialises the autocompletetextview which allows people to search for pokemon names.
      */
     private void initializePokemonAutoCompleteTextView() {
@@ -1510,7 +1536,7 @@ public class Pokefly extends Service {
      * Adds all options in the all iv possibilities list.
      */
     private void populateAllIvPossibilities(IVScanResult ivScanResult) {
-        IVResultsAdapter ivResults = new IVResultsAdapter(ivScanResult);
+        IVResultsAdapter ivResults = new IVResultsAdapter(ivScanResult, this);
         rvResults.setAdapter(ivResults);
     }
 
@@ -1982,9 +2008,14 @@ public class Pokefly extends Service {
     private void scanPokemon(Bitmap pokemonImage, @NonNull Optional<String> screenShotPath) {
         //WARNING: this method *must* always send an intent at the end, no matter what, to avoid the application
         // hanging.
+        boolean s8Patch = false;
+        double screenRatio = (double) displayMetrics.heightPixels / (double) displayMetrics.widthPixels;
+        if (screenRatio > 1.9 && screenRatio < 2.06) {
+            s8Patch = true;
+        }
         Intent info = Pokefly.createNoInfoIntent();
         try {
-            ScanResult res = ocr.scanPokemon(pokemonImage, trainerLevel);
+            ScanResult res = ocr.scanPokemon(pokemonImage, trainerLevel, s8Patch);
             if (res.isFailed()) {
                 Toast.makeText(Pokefly.this, getString(R.string.scan_pokemon_failed), Toast.LENGTH_SHORT).show();
             }
